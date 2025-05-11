@@ -1,3 +1,6 @@
+require('dotenv').config()
+
+const ExcelJS = require('exceljs')
 const express = require('express')
 const mongoose = require('mongoose')
 const jwt = require('jsonwebtoken')
@@ -73,19 +76,73 @@ app.get('/api/karyawan-yessi', auth, checkRole(['karyawan-yessi']), (req, res) =
 });
 
 // Route yang hanya bisa diakses oleh karyawan Alfi
-app.get('/api/karyawan-alfi', auth, checkRole(['karyawan-alfi']), (req, res) => {
-  res.json({ message: 'Halo Karyawan Alfi!' });
-});
+// app.get('/api/karyawan-alfi', auth, checkRole(['karyawan-alfi']), (req, res) => {
+//   res.json({ message: 'Halo Karyawan Alfi!' });
+// });
 
 // Route yang hanya bisa diakses oleh owner
 app.get('/api/owner-only', auth, checkRole(['owner']), (req, res) => {
   res.json({ message: 'Halo Owner!' });
 });
 
+// export
+app.get('/api/products/export-excel', async(req, res) => {
+  try {
+    const products = await Product.find({}, 'kodeProduk noBatch namaProduk exp hpp hargaJual stok notifStok deskripsi')
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Produk')
+
+    // Tambahkan header
+    worksheet.columns = [
+      { header: 'Kode Produk', key: 'kodeProduk', width: 15 },
+      { header: 'No. Batch', key: 'noBatch', width: 15 },
+      { header: 'Nama Produk', key: 'namaProduk', width: 30 },
+      { header: 'EXP Date', key: 'exp', width: 15 },
+      { header: 'HPP', key: 'hpp', width: 15, style: { numFmt: '#,##0' } },
+      { header: 'Harga Jual', key: 'hargaJual', width: 15, style: { numFmt: '#,##0' } },
+      { header: 'Stok', key: 'stok', width: 10 },
+      { header: 'Notif Stok', key: 'notifStok', width: 10 },
+      { header: 'Deskripsi', key: 'deskripsi', width: 40 }
+    ];
+
+    // Tambahkan data produk
+    products.forEach(product => {
+      worksheet.addRow({
+        kodeProduk: product.kodeProduk,
+        noBatch: product.noBatch,
+        namaProduk: product.namaProduk,
+        exp: product.exp.toISOString().split('T')[0], // Format tanggal YYYY-MM-DD
+        hpp: product.hpp,
+        hargaJual: product.hargaJual,
+        stok: product.stok,
+        notifStok: product.notifStok,
+        deskripsi: product.deskripsi
+      });
+    });
+
+    // Set header response untuk download file
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename=daftar_produk.xlsx'
+    );
+
+    // Tulis workbook ke response
+    await workbook.xlsx.write(res);
+    res.end();
+  }catch(err) {
+    console.error('Error exporting to Excel: ', err);
+    res.status(500).json({message: 'Gagal export data ke Excel', error: err.message})
+  }
+})
+
 // login
 app.post('/api/login', async (req, res) => {
   const { fullName, password } = req.body;
-  console.log(`Login attempt with fullName: ${fullName}, password: ${password}`);
+  console.log(`Login attempt with fullName: ${fullName}`);
 
   try {
     // Cek apakah user adalah admin
